@@ -1,0 +1,245 @@
+# Azure Communication UI Library - Swift Package Manager Usage
+
+This document describes how to use the generated Azure Communication UI Library Swift Package Manager package.
+
+## Package Information
+- **Generated From Tag**: {{GIT_TAG}}
+- **Generated On**: {{GENERATION_DATE}}
+- **Platform Support**: iOS 16.0+
+
+## Available Products
+
+### Core SDKs
+- **AzureCommunicationCalling** - Azure Communication Services Calling SDK (low-level API)
+- **AzureCommunicationUICommon** - Common utilities and components
+
+### UI Libraries  
+- **AzureCommunicationUICalling** - Complete calling UI experience
+- **AzureCommunicationUIChat** - Complete chat UI experience
+
+## Installation
+
+### Option 1: Local Package (Recommended)
+1. Add this package folder to your project directory
+2. In Xcode: File → Add Package Dependencies → Add Local
+3. Select the package folder
+
+### Option 2: Package.swift
+```swift
+// Add to your Package.swift
+dependencies: [
+    .package(path: "path/to/this/package")
+],
+targets: [
+    .target(
+        name: "YourTarget",
+        dependencies: [
+            .product(name: "AzureCommunicationCalling", package: "AzureCommunicationUI"),
+            .product(name: "AzureCommunicationUICalling", package: "AzureCommunicationUI"),
+            .product(name: "AzureCommunicationUIChat", package: "AzureCommunicationUI"),
+            .product(name: "AzureCommunicationUICommon", package: "AzureCommunicationUI")
+        ]
+    )
+]
+```
+
+## Usage Examples
+
+### Calling UI Library
+```swift
+import AzureCommunicationUICalling
+import AzureCommunicationUICommon
+
+class CallViewController: UIViewController {
+    func startCall() {
+        let callCompositeOptions = CallCompositeOptions(
+            theme: nil,
+            localization: nil,
+            setupScreenOrientation: nil,
+            callingScreenOrientation: nil,
+            enableMultitasking: true,
+            enableSystemPictureInPictureWhenMultitasking: true,
+            callScreenOptions: nil,
+            displayName: "User"
+        )
+        
+        let communicationTokenCredential = try! CommunicationTokenCredential(token: "YOUR_TOKEN")
+        let callComposite = CallComposite(
+            credential: communicationTokenCredential,
+            withOptions: callCompositeOptions
+        )
+        
+        // Launch call
+        callComposite.launch(
+            locator: .teamsMeeting(teamsLink: "https://teams.microsoft.com/l/meetup-join/..."),
+            localOptions: .init()
+        )
+    }
+}
+```
+
+### Chat UI Library
+```swift
+import AzureCommunicationUIChat
+import AzureCommunicationUICommon
+
+class ChatViewController: UIViewController {
+    func startChat() {
+        let chatCompositeOptions = ChatCompositeOptions(
+            theme: nil,
+            localization: nil
+        )
+        
+        let communicationTokenCredential = try! CommunicationTokenCredential(token: "YOUR_TOKEN")
+        let chatConfiguration = ChatConfiguration(
+            compositeId: UUID(),
+            threadId: "THREAD_ID",
+            credential: communicationTokenCredential,
+            displayName: "User"
+        )
+        
+        let chatAdapter = ChatAdapter(
+            configuration: chatConfiguration,
+            withOptions: chatCompositeOptions
+        )
+        
+        // Present chat UI
+        chatAdapter.connect { result in
+            switch result {
+            case .success:
+                // Chat connected successfully
+                break
+            case .failure(let error):
+                // Handle error
+                break
+            }
+        }
+    }
+}
+```
+
+### Direct SDK Usage
+```swift
+import AzureCommunicationCalling
+
+class DirectSDKExample {
+    func setupCallAgent() {
+        let callClient = CallClient()
+        let communicationTokenCredential = try! CommunicationTokenCredential(token: "YOUR_TOKEN")
+        
+        callClient.createCallAgent(userCredential: communicationTokenCredential) { result in
+            switch result {
+            case .success(let callAgent):
+                // Use call agent directly
+                break
+            case .failure(let error):
+                // Handle error
+                break
+            }
+        }
+    }
+}
+```
+
+## Migration from CocoaPods
+
+If you're migrating from CocoaPods:
+
+### 1. Remove CocoaPods Dependencies
+```ruby
+# Remove from your Podfile:
+# pod 'AzureCommunicationUICalling'
+# pod 'AzureCommunicationUIChat'
+# pod 'AzureCommunicationUICommon'
+```
+
+### 2. Add SPM Package
+Follow the installation steps above.
+
+### 3. Update Imports
+The import statements remain the same:
+```swift
+// These stay the same
+import AzureCommunicationCalling
+import AzureCommunicationUICalling
+import AzureCommunicationUIChat
+import AzureCommunicationUICommon
+```
+
+### 4. Update Build Settings
+- Remove any CocoaPods-specific build settings
+- No additional configuration needed for SPM
+
+## Architecture Details
+
+### XCFramework Components
+This package includes the following binary frameworks:
+
+- **AzureCommunicationCalling.xcframework** - Core calling SDK
+- **AzureCommunicationUICalling.xcframework** - Calling UI components  
+- **AzureCommunicationUIChat.xcframework** - Chat UI components
+- **AzureCommunicationChat.xcframework** - Core chat SDK
+- **FluentUI.xcframework** - Microsoft FluentUI components
+- **AzureCommunicationCommon.xcframework** - Azure common utilities
+- **AzureCore.xcframework** - Azure core SDK
+
+### Platform Support
+- **iOS Device**: arm64 (iPhone, iPad)
+- **iOS Simulator**: arm64 + x86_64 (Apple Silicon + Intel Macs)
+
+### Source Components
+- **AzureCommunicationUICommon** - Provided as Swift source code for maximum compatibility
+
+## Troubleshooting
+
+### Build Issues
+
+**Problem**: "No such module" errors
+**Solution**: 
+1. Ensure the package is properly added to your project
+2. Clean build folder (⌘+Shift+K)
+3. Reset package caches in Xcode
+
+**Problem**: Architecture-related errors
+**Solution**: 
+1. Verify you're using Xcode 14.0+
+2. Check that your project targets iOS 16.0+
+3. Ensure you're building for the correct architecture
+
+### Runtime Issues
+
+**Problem**: Missing resources or assets
+**Solution**: All required resources are included in the XCFrameworks
+
+**Problem**: Authentication errors
+**Solution**: Ensure you're using valid Azure Communication Services credentials
+
+### Performance
+
+**Problem**: Large app size
+**Solution**: XCFrameworks only include necessary architectures for your target
+
+## API Documentation
+
+For detailed API documentation, refer to:
+- [Azure Communication Services Documentation](https://docs.microsoft.com/azure/communication-services/)
+- [iOS SDK Documentation](https://azure.github.io/azure-sdk-for-ios/)
+
+## Support
+
+For issues related to:
+- **This SPM package**: Check the generation script or create the package again
+- **Azure Communication Services**: Use the official Azure support channels
+- **Original library**: https://github.com/Azure/communication-ui-library-ios
+
+## Version Information
+
+- **Package Generator Version**: Latest
+- **Source Repository**: https://github.com/Azure/communication-ui-library-ios
+- **Git Tag Used**: {{GIT_TAG}}
+- **Minimum iOS Version**: 16.0
+- **Swift Version**: 5.7+
+
+---
+
+✅ **Your Azure Communication UI Library SPM package is ready to use!**

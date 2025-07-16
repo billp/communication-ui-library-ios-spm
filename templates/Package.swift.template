@@ -1,0 +1,87 @@
+// swift-tools-version: 5.7
+// The swift-tools-version declares the minimum version of Swift required to build this package.
+
+import PackageDescription
+
+let package = Package(
+    name: "AzureCommunicationUI",
+    platforms: [.iOS(.v16)],
+    products: [
+        // Azure Communication Services Calling SDK (XCFramework binary)
+        .library(
+            name: "AzureCommunicationCalling",
+            targets: ["AzureCommunicationCalling"]
+        ),
+        // Azure Communication UI Calling Library (XCFramework binary)
+        .library(
+            name: "AzureCommunicationUICalling",
+            targets: ["AzureCommunicationUICallingBinary", "FluentUI", "AzureCommunicationCommon", "AzureCore"]
+        ),
+        // Azure Communication UI Chat Library (XCFramework binary)
+        .library(
+            name: "AzureCommunicationUIChat",
+            targets: ["AzureCommunicationUIChatBinary", "AzureCommunicationChat", "FluentUI", "AzureCommunicationCommon", "AzureCore"]
+        ),
+        // Azure Communication UI Common Library (from local sources)
+        .library(
+            name: "AzureCommunicationUICommon",
+            targets: ["AzureCommunicationUICommon"]
+        )
+    ],
+    dependencies: [
+        // No external dependencies needed - using local sources and XCFrameworks
+    ],
+    targets: [
+        // MARK: - Binary Targets (XCFrameworks)
+        
+        // AzureCommunicationCalling binary target (Azure Communication Services Calling SDK)
+        .binaryTarget(
+            name: "AzureCommunicationCalling",
+            path: "spm-generated/XCFrameworks/AzureCommunicationCalling.xcframework"
+        ),
+        
+        // AzureCommunicationUICalling binary target (Calling UI Library)
+        .binaryTarget(
+            name: "AzureCommunicationUICallingBinary",
+            path: "spm-generated/XCFrameworks/AzureCommunicationUICalling.xcframework"
+        ),
+        
+        // AzureCommunicationUIChat binary target (Chat UI Library)
+        .binaryTarget(
+            name: "AzureCommunicationUIChatBinary",
+            path: "spm-generated/XCFrameworks/AzureCommunicationUIChat.xcframework"
+        ),
+        
+        // AzureCommunicationChat binary target (Chat SDK)
+        .binaryTarget(
+            name: "AzureCommunicationChat",
+            path: "spm-generated/XCFrameworks/AzureCommunicationChat.xcframework"
+        ),
+        
+        // FluentUI binary target (Microsoft FluentUI components)
+        .binaryTarget(
+            name: "FluentUI",
+            path: "spm-generated/XCFrameworks/FluentUI.xcframework"
+        ),
+        
+        // AzureCommunicationCommon binary target (Azure Communication Common)
+        .binaryTarget(
+            name: "AzureCommunicationCommon",
+            path: "spm-generated/XCFrameworks/AzureCommunicationCommon.xcframework"
+        ),
+        
+        // AzureCore binary target (Azure Core)
+        .binaryTarget(
+            name: "AzureCore",
+            path: "spm-generated/XCFrameworks/AzureCore.xcframework"
+        ),
+        
+        // MARK: - Source Targets (Local)
+        
+        // AzureCommunicationUICommon from local sources
+        .target(
+            name: "AzureCommunicationUICommon",
+            path: "AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/AzureCommunicationUICommon"
+        )
+    ]
+)

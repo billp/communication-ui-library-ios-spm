@@ -1,0 +1,159 @@
+# Azure Communication UI Library - Swift Package Manager Generator
+
+This directory contains an automation tool to generate Swift Package Manager packages from the Azure Communication UI Library for iOS.
+
+## Overview
+
+The `generate-spm-package.sh` script automatically:
+1. Clones the Azure Communication UI Library repository
+2. Builds XCFrameworks for all components (Calling + Chat)
+3. Creates a complete SPM package with proper architecture support
+4. Validates the package and generates documentation
+
+## Quick Start
+
+```bash
+# Generate SPM package from a specific tag
+./generate-spm-package.sh --tag "AzureCommunicationUICalling_1.14.1"
+
+# Generate with custom output directory
+./generate-spm-package.sh --tag "main" --output-dir "/path/to/output"
+
+# Show help
+./generate-spm-package.sh --help
+```
+
+## Requirements
+
+- **Xcode** (with xcodebuild command line tools)
+- **CocoaPods** (`gem install cocoapods`)
+- **Swift Package Manager** (included with Xcode)
+- **Git**
+
+## What Gets Generated
+
+The script creates a complete SPM package with:
+
+### Products Available
+- `AzureCommunicationCalling` - Azure Communication Services Calling SDK
+- `AzureCommunicationUICalling` - Calling UI Library
+- `AzureCommunicationUIChat` - Chat UI Library  
+- `AzureCommunicationUICommon` - Common utilities
+
+### Architecture Support
+- **iOS Device**: arm64 (iPhone/iPad)
+- **iOS Simulator**: arm64 + x86_64 (Apple Silicon + Intel Macs)
+
+### Package Structure
+```
+output/
+├── Package.swift                     # Main SPM manifest
+├── spm-generated/
+│   └── XCFrameworks/                # All binary dependencies
+│       ├── AzureCommunicationCalling.xcframework
+│       ├── AzureCommunicationUICalling.xcframework
+│       ├── AzureCommunicationUIChat.xcframework
+│       ├── AzureCommunicationChat.xcframework
+│       ├── FluentUI.xcframework
+│       ├── AzureCommunicationCommon.xcframework
+│       └── AzureCore.xcframework
+├── AzureCommunicationUI/
+│   └── sdk/
+│       └── AzureCommunicationUICommon/  # Source-based common code
+├── README.md                        # Generated documentation
+├── SPM-USAGE.md                     # Usage instructions
+└── TEST_IMPORTS.swift               # Test file for validation
+```
+
+## Usage in Your Project
+
+Once generated, add the package to your iOS project:
+
+### In Package.swift
+```swift
+dependencies: [
+    .package(path: "path/to/generated/package")
+],
+targets: [
+    .target(
+        name: "YourTarget",
+        dependencies: [
+            .product(name: "AzureCommunicationCalling", package: "AzureCommunicationUI"),
+            .product(name: "AzureCommunicationUICalling", package: "AzureCommunicationUI"),
+            .product(name: "AzureCommunicationUIChat", package: "AzureCommunicationUI"),
+            .product(name: "AzureCommunicationUICommon", package: "AzureCommunicationUI")
+        ]
+    )
+]
+```
+
+### In Swift Code
+```swift
+import AzureCommunicationCalling      // Calling SDK
+import AzureCommunicationUICalling    // Calling UI Library
+import AzureCommunicationUIChat       // Chat UI Library
+import AzureCommunicationUICommon     // Common utilities
+```
+
+## How It Works
+
+### Phase 1: Repository Setup
+- Clones the official Azure Communication UI Library repository
+- Checks out the specified git tag
+- Validates the repository structure
+
+### Phase 2: CocoaPods Setup
+- Runs `pod install` to resolve dependencies
+- Prepares the Xcode workspace for building
+
+### Phase 3: XCFramework Generation
+- Builds iOS device archives (arm64)
+- Builds iOS simulator archives (arm64 + x86_64)
+- Creates universal XCFrameworks for all components
+- Extracts dependency frameworks from CocoaPods
+
+### Phase 4: SPM Package Generation
+- Creates the output directory structure
+- Copies all XCFrameworks to the package
+- Copies source code for common components
+- Generates Package.swift from template
+
+### Phase 5: Validation & Testing
+- Tests package resolution with Swift Package Manager
+- Validates XCFramework architectures
+- Generates test files and documentation
+
+## Supported Tags
+
+The script works with any valid git tag from the Azure Communication UI Library repository:
+
+- `AzureCommunicationUICalling_1.14.1` (recommended)
+- `AzureCommunicationUIChat_1.0.0-beta.5`
+- `main` (latest development)
+- Any other valid tag or branch
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Build Errors**: Ensure you have the latest Xcode and command line tools
+2. **CocoaPods Issues**: Run `pod repo update` and try again
+3. **Permission Errors**: Ensure the script has execute permissions (`chmod +x`)
+4. **Architecture Issues**: The script automatically handles all required architectures
+
+### Debug Mode
+
+Add `set -x` to the script for verbose output, or check the log files in the temporary build directory.
+
+## Contributing
+
+This is a utility script for the Azure Communication UI Library. For issues with the generated packages, refer to the main repository:
+https://github.com/Azure/communication-ui-library-ios
+
+## License
+
+Same as the original Azure Communication UI Library - MIT License
+
+---
+
+**Generated with Azure Communication UI Library SPM Package Generator**
