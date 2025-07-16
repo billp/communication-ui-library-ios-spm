@@ -44,6 +44,68 @@ log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
+# Function to get latest tag
+get_latest_tag() {
+    # Create temporary directory for tag fetching
+    local temp_tag_dir=$(mktemp -d)
+    
+    # Clone repository with minimal depth to get tags
+    git clone --bare https://github.com/Azure/communication-ui-library-ios.git "$temp_tag_dir/repo.git" 2>/dev/null
+    
+    if [[ $? -eq 0 ]]; then
+        # Get the latest tag
+        cd "$temp_tag_dir/repo.git"
+        local latest_tag=$(git tag --sort=-creatordate | head -1)
+        
+        if [[ -n "$latest_tag" ]]; then
+            # Return only the tag name, no log output
+            echo "$latest_tag"
+        else
+            rm -rf "$temp_tag_dir"
+            return 1
+        fi
+        
+        # Cleanup
+        rm -rf "$temp_tag_dir"
+    else
+        rm -rf "$temp_tag_dir"
+        return 1
+    fi
+}
+
+# Function to show available tags
+show_available_tags() {
+    log_info "Fetching available tags from Azure Communication UI Library repository..."
+    
+    # Create temporary directory for tag fetching
+    local temp_tag_dir=$(mktemp -d)
+    
+    # Clone repository with minimal depth to get tags
+    log_info "Cloning repository to fetch tags..."
+    git clone --bare https://github.com/Azure/communication-ui-library-ios.git "$temp_tag_dir/repo.git" 2>/dev/null
+    
+    if [[ $? -eq 0 ]]; then
+        # Fetch all tags and display them in reverse chronological order (newest first)
+        cd "$temp_tag_dir/repo.git"
+        log_info "Available tags (newest first):"
+        git tag --sort=-creatordate | head -20 | while read tag; do
+            date=$(git log -1 --format=%ad --date=short "$tag" 2>/dev/null || echo "unknown")
+            echo "  $tag ($date)"
+        done
+        
+        log_info ""
+        log_info "Showing 20 most recent tags. Use 'git tag' in a cloned repository to see all tags."
+        
+        # Cleanup
+        rm -rf "$temp_tag_dir"
+    else
+        log_error "Failed to fetch tags from repository"
+        log_error "Please check your internet connection and try again"
+        rm -rf "$temp_tag_dir"
+        exit 1
+    fi
+}
+
 # Help function
 show_help() {
     cat << EOF
@@ -51,15 +113,21 @@ Azure Communication UI Library SPM Package Generator
 
 USAGE:
     ./generate-spm-package.sh --tag <GIT_TAG> [OPTIONS]
+    ./generate-spm-package.sh --latest [OPTIONS]
+    ./generate-spm-package.sh --available-tags
 
 OPTIONS:
-    -t, --tag <GIT_TAG>           Git tag to checkout (required)
+    -t, --tag <GIT_TAG>           Git tag to checkout (required unless --latest is used)
+    -l, --latest                  Use the latest available tag (alternative to --tag)
     -o, --output-dir <OUTPUT_DIR> Output directory (default: ./output)
+    --available-tags              Show available tags from the repository
     -h, --help                    Show this help message
 
 EXAMPLES:
+    ./generate-spm-package.sh --available-tags
+    ./generate-spm-package.sh --latest
     ./generate-spm-package.sh --tag "AzureCommunicationUICalling_1.14.1"
-    ./generate-spm-package.sh --tag "main" --output-dir "/path/to/output"
+    ./generate-spm-package.sh --latest --output-dir "/path/to/output"
 
 DESCRIPTION:
     This script automates the generation of a Swift Package Manager package
@@ -77,15 +145,35 @@ EOF
 
 # Parse command line arguments
 parse_args() {
+    local use_latest=false
+    
     while [[ $# -gt 0 ]]; do
         case $1 in
             -t|--tag)
+                if [[ "$use_latest" == "true" ]]; then
+                    log_error "Cannot use both --tag and --latest options"
+                    show_help
+                    exit 1
+                fi
                 GIT_TAG="$2"
                 shift 2
+                ;;
+            -l|--latest)
+                if [[ -n "$GIT_TAG" ]]; then
+                    log_error "Cannot use both --tag and --latest options"
+                    show_help
+                    exit 1
+                fi
+                use_latest=true
+                shift
                 ;;
             -o|--output-dir)
                 OUTPUT_DIR="$2"
                 shift 2
+                ;;
+            --available-tags)
+                show_available_tags
+                exit 0
                 ;;
             -h|--help)
                 show_help
@@ -99,8 +187,20 @@ parse_args() {
         esac
     done
 
+    # Handle --latest option
+    if [[ "$use_latest" == "true" ]]; then
+        log_info "Fetching latest tag from Azure Communication UI Library repository..."
+        GIT_TAG=$(get_latest_tag)
+        if [[ -z "$GIT_TAG" ]]; then
+            log_error "Failed to get latest tag"
+            log_error "Please check your internet connection and try again"
+            exit 1
+        fi
+        log_info "Using latest tag: $GIT_TAG"
+    fi
+
     if [[ -z "$GIT_TAG" ]]; then
-        log_error "Git tag is required. Use --tag <GIT_TAG>"
+        log_error "Git tag is required. Use --tag <GIT_TAG> or --latest"
         show_help
         exit 1
     fi

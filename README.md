@@ -79,14 +79,24 @@ Before running the script, ensure you have:
 
 ## 🔧 Usage Examples
 
-### Basic Usage
+### Show Available Tags
+```bash
+./generate-spm-package.sh --available-tags
+```
+
+### Use Latest Tag (Recommended)
+```bash
+./generate-spm-package.sh --latest
+```
+
+### Basic Usage with Specific Tag
 ```bash
 ./generate-spm-package.sh --tag "AzureCommunicationUICalling_1.14.2"
 ```
 
 ### Custom Output Directory
 ```bash
-./generate-spm-package.sh --tag "AzureCommunicationUICalling_1.14.2" --output-dir "/path/to/custom/output"
+./generate-spm-package.sh --latest --output-dir "/path/to/custom/output"
 ```
 
 ### Help
