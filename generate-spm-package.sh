@@ -783,22 +783,8 @@ generate_spm_package() {
     
     cp -r "$common_source_path" "$OUTPUT_DIR/AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/"
     
-    # Copy FluentUI source files for source target
-    log_info "Copying FluentUI source files..."
-    
-    # Find FluentUI source in the repo
-    local fluentui_source_path=""
-    if [[ -d "$TEMP_DIR/repo/sdk/fluentui-apple" ]]; then
-        fluentui_source_path="$TEMP_DIR/repo/sdk/fluentui-apple"
-    elif [[ -d "$TEMP_DIR/repo/AzureCommunicationUI/sdk/fluentui-apple" ]]; then
-        fluentui_source_path="$TEMP_DIR/repo/AzureCommunicationUI/sdk/fluentui-apple"
-    else
-        log_error "Could not find FluentUI source files"
-        exit 1
-    fi
-    
-    log_info "Copying FluentUI from: $fluentui_source_path"
-    cp -r "$fluentui_source_path" "$OUTPUT_DIR/FluentUI"
+    # FluentUI is embedded in Azure XCFrameworks - no separate source needed
+    log_info "FluentUI is embedded in Azure XCFrameworks via cocoapods-spm integration"
     
     # Generate Package.swift from template
     log_info "Generating Package.swift..."
