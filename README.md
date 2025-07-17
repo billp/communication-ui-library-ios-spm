@@ -55,9 +55,10 @@ This automation tool successfully creates complete SPM packages from any tag of 
 
 ### Available Products
 - **AzureCommunicationCalling** - Azure Communication Services Calling SDK
-- **AzureCommunicationUICalling** - Complete calling UI experience
-- **AzureCommunicationUIChat** - Complete chat UI experience (includes Trouter dependency)
+- **AzureCommunicationUICalling** - Complete calling UI experience (includes FluentUI)
+- **AzureCommunicationUIChat** - Complete chat UI experience (includes FluentUI and Trouter)
 - **AzureCommunicationUICommon** - Common utilities and components
+- **FluentUI** - Microsoft FluentUI components (available as standalone library)
 
 ### Architecture Support
 - **iOS Device**: arm64 (iPhone/iPad)
@@ -129,7 +130,8 @@ targets: [
 ### In Swift Code
 ```swift
 import AzureCommunicationCalling      // Calling SDK
-import AzureCommunicationUICalling    // Calling UI Library
-import AzureCommunicationUIChat       // Chat UI Library
+import AzureCommunicationUICalling    // Calling UI Library (includes FluentUI)
+import AzureCommunicationUIChat       // Chat UI Library (includes FluentUI)
 import AzureCommunicationUICommon     // Common utilities
+import FluentUI                       // Microsoft FluentUI (direct access)
 ```

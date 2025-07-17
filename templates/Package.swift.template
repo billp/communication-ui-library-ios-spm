@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "AzureCommunicationUI",
+    defaultLocalization: "en",
     platforms: [.iOS(.v16)],
     products: [
         // Azure Communication Services Calling SDK (XCFramework binary)
@@ -26,6 +27,11 @@ let package = Package(
         .library(
             name: "AzureCommunicationUICommon",
             targets: ["AzureCommunicationUICommon"]
+        ),
+        // FluentUI Library (from local sources)
+        .library(
+            name: "FluentUI",
+            targets: ["FluentUI"]
         )
     ],
     dependencies: [
@@ -58,11 +64,6 @@ let package = Package(
             path: "spm-generated/XCFrameworks/AzureCommunicationChat.xcframework"
         ),
         
-        // FluentUI binary target (Microsoft FluentUI components)
-        .binaryTarget(
-            name: "FluentUI",
-            path: "spm-generated/XCFrameworks/FluentUI.xcframework"
-        ),
         
         // AzureCommunicationCommon binary target (Azure Communication Common)
         .binaryTarget(
@@ -76,12 +77,42 @@ let package = Package(
             path: "spm-generated/XCFrameworks/AzureCore.xcframework"
         ),
         
+        // Trouter binary target (Azure Communication Services Trouter)
+        .binaryTarget(
+            name: "Trouter",
+            path: "spm-generated/XCFrameworks/Trouter.xcframework"
+        ),
+        
         // MARK: - Source Targets (Local)
+        
+        // FluentUIResources from local sources (shared resources)
+        .target(
+            name: "FluentUIResources",
+            path: "FluentUI/apple",
+            resources: [
+                .process("Resources")
+            ]
+        ),
+        
+        // FluentUI from local sources
+        .target(
+            name: "FluentUI",
+            dependencies: [
+                .target(name: "FluentUIResources")
+            ],
+            path: "FluentUI/ios/FluentUI"
+            resources: [
+                .process("Resources")
+            ]
+        ),
         
         // AzureCommunicationUICommon from local sources
         .target(
             name: "AzureCommunicationUICommon",
-            path: "AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/AzureCommunicationUICommon"
+            path: "AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/AzureCommunicationUICommon",
+            linkerSettings: [
+                .linkedFramework("UIKit", .when(platforms: [.iOS]))
+            ]
         )
     ]
 )

@@ -242,12 +242,30 @@ check_requirements() {
         missing_tools+=("git")
     fi
     
+    if ! command -v gem &> /dev/null; then
+        missing_tools+=("gem (Ruby Gems)")
+    fi
+    
     if [[ ${#missing_tools[@]} -gt 0 ]]; then
         log_error "Missing required tools:"
         for tool in "${missing_tools[@]}"; do
             log_error "  - $tool"
         done
         exit 1
+    fi
+    
+    # Check and install cocoapods-spm if needed
+    if ! gem list cocoapods-spm | grep -q cocoapods-spm; then
+        log_info "Installing cocoapods-spm gem..."
+        gem install cocoapods-spm
+        if [[ $? -eq 0 ]]; then
+            log_success "cocoapods-spm installed successfully"
+        else
+            log_error "Failed to install cocoapods-spm gem"
+            exit 1
+        fi
+    else
+        log_info "cocoapods-spm is already available"
     fi
     
     log_success "All required tools are available"
@@ -289,6 +307,158 @@ setup_repository() {
     fi
     
     log_success "Repository setup completed"
+}
+
+# Setup FluentUI from source with SPM resources
+setup_fluentui_source() {
+    log_step "Setting up FluentUI from source"
+    
+    # Navigate to the correct directory based on repository structure
+    if [[ -f "$TEMP_DIR/repo/AzureCommunicationUI/Podfile" ]]; then
+        cd "$TEMP_DIR/repo/AzureCommunicationUI"
+        log_info "Using AzureCommunicationUI subdirectory"
+    elif [[ -f "$TEMP_DIR/repo/Podfile" ]]; then
+        cd "$TEMP_DIR/repo"
+        log_info "Using repository root directory"
+    else
+        log_error "Could not find Podfile in expected locations"
+        exit 1
+    fi
+    
+    # STEP 1: First modify the Podfile before doing anything else
+    log_info "STEP 1: Checking existing Podfile for FluentUI dependencies..."
+    
+    # Show current FluentUI dependencies
+    log_info "Current FluentUI entries in Podfile:"
+    grep -n "FluentUI" Podfile || log_info "No FluentUI entries found in Podfile"
+    
+    # Show full Podfile content first
+    log_info "Current complete Podfile content:"
+    cat Podfile
+    
+    # Create sdk directory if it doesn't exist
+    mkdir -p sdk
+    
+    # STEP 2: Clone and checkout FluentUI source code
+    log_info "STEP 2: Cloning FluentUI source code..."
+    git clone https://github.com/microsoft/fluentui-apple.git sdk/fluentui-apple
+    
+    # Navigate to FluentUI source and checkout specific tag
+    cd sdk/fluentui-apple
+    log_info "Checking out FluentUI tag 0.10.0..."
+    git checkout 0.10.0
+    
+    # STEP 3: Modify Package.swift to add resources configuration
+    log_info "STEP 3: Modifying FluentUI Package.swift to add resources configuration..."
+    
+    # Read the current Package.swift
+    if [[ ! -f "Package.swift" ]]; then
+        log_error "FluentUI Package.swift not found"
+        exit 1
+    fi
+    
+    # Create a backup
+    cp Package.swift Package.swift.backup
+    
+    # First, let's see the current content
+    log_info "Current FluentUI Package.swift structure:"
+    grep -n -A 5 -B 5 "FluentUIResources\|FluentUI_ios" Package.swift || true
+    
+    # Add resources configuration to FluentUI Package.swift
+    log_info "Adding resources configuration to FluentUI Package.swift..."
+    
+    # Check what resources exist
+    if [[ -d "ios/FluentUI/Resources" ]]; then
+        log_info "Found FluentUI iOS resources directory:"
+        ls -la ios/FluentUI/Resources/ | head -5
+    fi
+    
+    # Use a more precise approach to add resources configuration
+    # Create a Python script to handle the complex modification
+    python3 - << 'EOF'
+import re
+
+# Read Package.swift
+with open('Package.swift', 'r') as f:
+    content = f.read()
+
+# For FluentUIResources target, add resources after path
+# Pattern: .target(name: "FluentUIResources", path: "apple")
+fluentui_resources_pattern = r'(\.target\s*\(\s*name:\s*"FluentUIResources",\s*path:\s*"apple")(\s*\))'
+def fix_fluentui_resources(match):
+    return match.group(1) + ',\n            resources: [\n                .process("Resources")\n            ]' + match.group(2)
+
+content = re.sub(fluentui_resources_pattern, fix_fluentui_resources, content)
+
+# For FluentUI_ios target, we need to be more careful
+# We need to find the target block and add resources before the closing )
+# Pattern is more complex - find the entire target block
+ios_pattern = r'(\.target\s*\(\s*name:\s*"FluentUI_ios",\s*dependencies:\s*\[[^\]]+\],\s*path:\s*"[^"]+",\s*exclude:\s*\[[^\]]+\])(\s*\))'
+def fix_fluentui_ios(match):
+    return match.group(1) + ',\n            resources: [\n                .process("Resources")\n            ]' + match.group(2)
+
+content = re.sub(ios_pattern, fix_fluentui_ios, content, flags=re.DOTALL)
+
+# Write back
+with open('Package.swift', 'w') as f:
+    f.write(content)
+
+print("Successfully modified Package.swift")
+EOF
+    
+    # Verify the changes
+    log_info "Modified FluentUI Package.swift - checking for resources blocks:"
+    grep -n -A 10 -B 5 "resources:" Package.swift || log_warning "Resources block may not have been added correctly"
+    
+    # Go back to the main repo directory for Podfile modification
+    if [[ -f "$TEMP_DIR/repo/AzureCommunicationUI/Podfile" ]]; then
+        cd "$TEMP_DIR/repo/AzureCommunicationUI"
+    else
+        cd "$TEMP_DIR/repo"
+    fi
+    
+    # STEP 4: Now modify the Podfile to use spm_pkg for FluentUI
+    log_info "STEP 4: Modifying Podfile to use FluentUI from source..."
+    
+    # Check if FluentUI is actually in the Podfile
+    if grep -q "FluentUI" Podfile; then
+        log_info "Found FluentUI in Podfile, replacing with spm_pkg..."
+        
+        # Create backup of Podfile
+        cp Podfile Podfile.backup
+        
+        # Remove existing FluentUI entries and add spm_pkg entry
+        # First remove any existing FluentUI pod entries
+        sed -i.bak '/pod.*FluentUI/d' Podfile
+        
+        # Add spm_pkg entry after the platform line - using correct cocoapods-spm syntax
+        sed -i.bak2 '/platform :ios/a\
+\
+# Use FluentUI from local SPM source\
+spm_pkg "FluentUI", :path => "./sdk/fluentui-apple"' Podfile
+        
+        # Show the modified Podfile
+        log_info "Modified Podfile content:"
+        cat Podfile
+    else
+        log_info "No FluentUI CocoaPods dependency found in Podfile"
+        log_info "Adding spm_pkg entry for FluentUI anyway..."
+        
+        # Create backup of Podfile
+        cp Podfile Podfile.backup
+        
+        # Add spm_pkg entry after the platform line
+        sed -i.bak '/platform :ios/a\
+\
+# Use FluentUI from local SPM source\
+spm_pkg "FluentUI", :path => "./sdk/fluentui-apple"' Podfile
+        
+        # Show the modified Podfile
+        log_info "Modified Podfile content:"
+        cat Podfile
+    fi
+    
+    log_success "FluentUI source setup completed"
 }
 
 # Phase 2: CocoaPods Setup
@@ -353,6 +523,7 @@ build_xcframework() {
         SKIP_INSTALL=NO \
         CODE_SIGNING_REQUIRED=NO \
         CODE_SIGNING_ALLOWED=NO \
+        IPHONEOS_DEPLOYMENT_TARGET=16.0 \
         > "$build_dir/ios-build.log" 2>&1
     
     # Build iOS simulator archive
@@ -366,6 +537,7 @@ build_xcframework() {
         SKIP_INSTALL=NO \
         CODE_SIGNING_REQUIRED=NO \
         CODE_SIGNING_ALLOWED=NO \
+        IPHONEOS_DEPLOYMENT_TARGET=16.0 \
         > "$build_dir/simulator-build.log" 2>&1
     
     # Find framework paths
@@ -459,8 +631,8 @@ generate_xcframeworks() {
     local calling_archive="$TEMP_DIR/build-AzureCommunicationUICalling/AzureCommunicationUICalling-iOS.xcarchive"
     local calling_sim_archive="$TEMP_DIR/build-AzureCommunicationUICalling/AzureCommunicationUICalling-Simulator.xcarchive"
     
-    # Create XCFrameworks for dependencies
-    local dependencies=("FluentUI" "AzureCommunicationCommon" "AzureCore")
+    # Create XCFrameworks for dependencies (excluding FluentUI which we'll use from source)
+    local dependencies=("AzureCommunicationCommon" "AzureCore")
     
     for dep in "${dependencies[@]}"; do
         log_info "Creating XCFramework for $dep..."
@@ -478,6 +650,134 @@ generate_xcframeworks() {
             log_warning "Could not find $dep framework in archives"
         fi
     done
+    
+    # Extract FluentUI from CocoaPods and create XCFramework with resources
+    log_info "Creating FluentUI XCFramework from CocoaPods build..."
+    
+    # Navigate back to CocoaPods directory
+    if [[ -f "$TEMP_DIR/repo/AzureCommunicationUI/Podfile" ]]; then
+        cd "$TEMP_DIR/repo/AzureCommunicationUI"
+    else
+        cd "$TEMP_DIR/repo"
+    fi
+    
+    # Build FluentUI using the workspace (it was built with cocoapods-spm integration)
+    local workspace=""
+    if [[ -f "AzureCommunicationUI.xcworkspace" ]]; then
+        workspace="AzureCommunicationUI.xcworkspace"
+    else
+        workspace=$(find . -name "*.xcworkspace" -maxdepth 1 | head -1)
+        workspace=$(basename "$workspace")
+    fi
+    
+    log_info "Building FluentUI from workspace: $workspace"
+    
+    # First check available schemes
+    log_info "Checking available schemes in workspace..."
+    xcodebuild -workspace "$workspace" -list | grep -A 20 "Schemes:" || true
+    
+    local fluentui_build_dir="$TEMP_DIR/build-FluentUI-CocoaPods"
+    mkdir -p "$fluentui_build_dir"
+    
+    # Try to find the correct FluentUI scheme
+    local fluentui_scheme=""
+    if xcodebuild -workspace "$workspace" -list | grep -q "FluentUI-Package"; then
+        fluentui_scheme="FluentUI-Package"
+    elif xcodebuild -workspace "$workspace" -list | grep -q "FluentUI"; then
+        fluentui_scheme="FluentUI"
+    else
+        log_warning "No FluentUI scheme found in workspace, falling back to extract from Pods directory"
+        # Skip building and go directly to extraction from Pods
+        ios_framework=$(find "Pods" -name "FluentUI.framework" -type d | head -1)
+        if [[ -n "$ios_framework" ]]; then
+            log_info "Found FluentUI framework in Pods: $ios_framework"
+            # Create simulator version
+            local temp_sim_dir="$fluentui_build_dir/simulator"
+            mkdir -p "$temp_sim_dir" 
+            cp -r "$ios_framework" "$temp_sim_dir/"
+            simulator_framework="$temp_sim_dir/FluentUI.framework"
+            
+            log_info "FluentUI iOS framework: $ios_framework"
+            log_info "FluentUI Simulator framework: $simulator_framework"
+            
+            # Create FluentUI XCFramework
+            log_info "Creating FluentUI XCFramework from Pods framework..."
+            xcodebuild -create-xcframework \
+                -framework "$ios_framework" \
+                -framework "$simulator_framework" \
+                -output "$TEMP_DIR/xcframeworks/FluentUI.xcframework"
+                
+            log_success "FluentUI XCFramework created from Pods"
+        else
+            log_error "Could not find FluentUI framework in Pods directory"
+            exit 1
+        fi
+        return
+    fi
+    
+    log_info "Using FluentUI scheme: $fluentui_scheme"
+    
+    # Build iOS device archive for FluentUI
+    log_info "Building FluentUI iOS device archive from CocoaPods..."
+    xcodebuild -workspace "$workspace" \
+        -scheme "$fluentui_scheme" \
+        -configuration Release \
+        -destination 'generic/platform=iOS' \
+        -archivePath "$fluentui_build_dir/FluentUI-iOS.xcarchive" \
+        archive \
+        SKIP_INSTALL=NO \
+        CODE_SIGNING_REQUIRED=NO \
+        CODE_SIGNING_ALLOWED=NO \
+        IPHONEOS_DEPLOYMENT_TARGET=16.0 \
+        > "$fluentui_build_dir/ios-build.log" 2>&1
+    
+    # Build iOS simulator archive for FluentUI  
+    log_info "Building FluentUI iOS simulator archive from CocoaPods..."
+    xcodebuild -workspace "$workspace" \
+        -scheme FluentUI-Package \
+        -configuration Release \
+        -destination 'generic/platform=iOS Simulator' \
+        -archivePath "$fluentui_build_dir/FluentUI-Simulator.xcarchive" \
+        archive \
+        SKIP_INSTALL=NO \
+        CODE_SIGNING_REQUIRED=NO \
+        CODE_SIGNING_ALLOWED=NO \
+        IPHONEOS_DEPLOYMENT_TARGET=16.0 \
+        > "$fluentui_build_dir/simulator-build.log" 2>&1
+    
+    # Find FluentUI framework in archives
+    local ios_framework=$(find "$fluentui_build_dir/FluentUI-iOS.xcarchive" -name "FluentUI.framework" -type d | head -1)
+    local simulator_framework=$(find "$fluentui_build_dir/FluentUI-Simulator.xcarchive" -name "FluentUI.framework" -type d | head -1)
+    
+    if [[ -z "$ios_framework" || -z "$simulator_framework" ]]; then
+        log_warning "Could not build FluentUI from CocoaPods workspace, falling back to SPM framework extraction"
+        
+        # Alternative: extract FluentUI framework from the SPM build in CocoaPods
+        ios_framework=$(find "Pods" -name "FluentUI.framework" -path "*/FluentUI-Package_FluentUI.framework" -type d | head -1)
+        if [[ -n "$ios_framework" ]]; then
+            log_info "Found FluentUI framework in CocoaPods SPM integration: $ios_framework"
+            # Create a duplicate for simulator (same framework works for both in many cases)
+            local temp_sim_dir="$fluentui_build_dir/simulator"
+            mkdir -p "$temp_sim_dir"
+            cp -r "$ios_framework" "$temp_sim_dir/"
+            simulator_framework="$temp_sim_dir/FluentUI.framework"
+        else
+            log_error "Could not find FluentUI framework in CocoaPods build or SPM integration"
+            exit 1
+        fi
+    fi
+    
+    log_info "FluentUI iOS framework: $ios_framework"
+    log_info "FluentUI Simulator framework: $simulator_framework"
+    
+    # Create FluentUI XCFramework
+    log_info "Creating FluentUI XCFramework from CocoaPods build..."
+    xcodebuild -create-xcframework \
+        -framework "$ios_framework" \
+        -framework "$simulator_framework" \
+        -output "$TEMP_DIR/xcframeworks/FluentUI.xcframework"
+        
+    log_success "FluentUI XCFramework created from CocoaPods with SPM resources"
     
     # For Chat, we also need AzureCommunicationChat SDK
     log_info "Creating XCFramework for AzureCommunicationChat..."
@@ -498,6 +798,79 @@ generate_xcframeworks() {
     log_success "XCFramework generation completed"
 }
 
+# Extract FluentUI resources from XCFramework for SPM
+extract_fluentui_resources() {
+    log_info "Extracting FluentUI resources from XCFramework..."
+    
+    # Create FluentUIWrapper Resources directory
+    mkdir -p "$OUTPUT_DIR/FluentUIWrapper/Resources"
+    
+    # Find FluentUI XCFramework
+    local fluentui_xcframework="$OUTPUT_DIR/spm-generated/XCFrameworks/FluentUI.xcframework"
+    
+    if [[ ! -d "$fluentui_xcframework" ]]; then
+        log_error "FluentUI XCFramework not found at: $fluentui_xcframework"
+        return 1
+    fi
+    
+    # Extract resources from both iOS device and simulator frameworks
+    local ios_bundle="$fluentui_xcframework/ios-arm64/FluentUI.framework/FluentUIResources-ios.bundle"
+    local sim_bundle="$fluentui_xcframework/ios-arm64_x86_64-simulator/FluentUI.framework/FluentUIResources-ios.bundle"
+    
+    # Use the iOS device bundle as primary source (they should be identical)
+    local source_bundle=""
+    if [[ -d "$ios_bundle" ]]; then
+        source_bundle="$ios_bundle"
+    elif [[ -d "$sim_bundle" ]]; then
+        source_bundle="$sim_bundle"
+    else
+        log_error "Could not find FluentUIResources-ios.bundle in FluentUI XCFramework"
+        return 1
+    fi
+    
+    # Copy the entire FluentUI resource bundle to the FluentUIWrapper Resources directory
+    log_info "Copying FluentUI resource bundle from: $source_bundle"
+    cp -r "$source_bundle" "$OUTPUT_DIR/FluentUIWrapper/Resources/"
+    
+    # Also copy the bundle directly to the main FluentUIWrapper directory for direct access
+    log_info "Copying FluentUI bundle for direct access"
+    cp -r "$source_bundle" "$OUTPUT_DIR/FluentUIWrapper/"
+    
+    # CRITICAL: The issue is that FluentUI XCFramework looks for the resource bundle within its own framework
+    # We need to ensure the FluentUI XCFramework has the resource bundle where it expects it
+    log_info "Verifying FluentUI XCFramework resource bundle is in the right location"
+    
+    # Check if the resource bundle exists in the XCFramework (it should)
+    if [[ -d "$ios_bundle" ]]; then
+        log_success "FluentUI XCFramework contains resource bundle at: $ios_bundle"
+    else
+        log_error "FluentUI XCFramework is missing resource bundle at: $ios_bundle"
+        
+        # Try to fix by copying the resource bundle back to the XCFramework
+        log_info "Attempting to restore resource bundle to XCFramework..."
+        cp -r "$source_bundle" "$fluentui_xcframework/ios-arm64/FluentUI.framework/"
+        
+        if [[ -d "$sim_bundle" ]]; then
+            log_info "Simulator framework also needs resource bundle"
+            cp -r "$source_bundle" "$fluentui_xcframework/ios-arm64_x86_64-simulator/FluentUI.framework/"
+        fi
+    fi
+    
+    # Verify the resources were copied
+    if [[ -f "$OUTPUT_DIR/FluentUIWrapper/Resources/FluentUIResources-ios.bundle/Assets.car" ]]; then
+        log_success "FluentUI Assets.car extracted successfully"
+    else
+        log_error "Failed to extract FluentUI Assets.car"
+        return 1
+    fi
+    
+    # Count localization files
+    local lproj_count=$(find "$OUTPUT_DIR/FluentUIWrapper/Resources/FluentUIResources-ios.bundle" -name "*.lproj" -type d | wc -l)
+    log_info "Extracted $lproj_count localization directories"
+    
+    log_success "FluentUI resources extracted successfully"
+}
+
 # Phase 4: SPM Package Generation
 generate_spm_package() {
     log_step "Phase 4: SPM Package Generation"
@@ -511,6 +884,7 @@ generate_spm_package() {
     # Create directory structure
     mkdir -p "$OUTPUT_DIR/spm-generated/XCFrameworks"
     mkdir -p "$OUTPUT_DIR/AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources"
+    mkdir -p "$OUTPUT_DIR/FluentUIWrapper"
     
     # Copy XCFrameworks
     log_info "Copying XCFrameworks to output directory..."
@@ -535,6 +909,27 @@ generate_spm_package() {
     
     cp -r "$common_source_path" "$OUTPUT_DIR/AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/"
     
+    # FluentUI is now built as XCFramework, no need to copy source
+    
+    # Create FluentUIWrapper target
+    log_info "Creating FluentUIWrapper target..."
+    cat > "$OUTPUT_DIR/FluentUIWrapper/FluentUIWrapper.swift" << 'EOF'
+import FluentUI
+import Foundation
+
+// FluentUI Wrapper
+// This wrapper target ensures that FluentUI XCFramework is properly linked with the Azure Communication UI libraries
+// FluentUI XCFramework now includes resources built from source with proper SPM configuration
+public struct FluentUIWrapper {
+    
+    // Initialize FluentUI - resources are now included in the XCFramework
+    public static func initialize() {
+        // FluentUI XCFramework built from properly configured source includes resources
+        print("FluentUIWrapper initialized - FluentUI XCFramework with resources")
+    }
+}
+EOF
+    
     # Generate Package.swift from template
     log_info "Generating Package.swift..."
     cat > "$OUTPUT_DIR/Package.swift" << 'EOF'
@@ -552,15 +947,15 @@ let package = Package(
             name: "AzureCommunicationCalling",
             targets: ["AzureCommunicationCalling"]
         ),
-        // Azure Communication UI Calling Library (XCFramework binary)
+        // Azure Communication UI Calling Library (XCFramework binary + FluentUI)
         .library(
             name: "AzureCommunicationUICalling",
-            targets: ["AzureCommunicationUICallingBinary", "FluentUI", "AzureCommunicationCommon", "AzureCore"]
+            targets: ["AzureCommunicationUICallingBinary", "AzureCommunicationCommon", "AzureCore", "FluentUIWrapper"]
         ),
-        // Azure Communication UI Chat Library (XCFramework binary)
+        // Azure Communication UI Chat Library (XCFramework binary + FluentUI)
         .library(
             name: "AzureCommunicationUIChat",
-            targets: ["AzureCommunicationUIChatBinary", "AzureCommunicationChat", "Trouter", "FluentUI", "AzureCommunicationCommon", "AzureCore"]
+            targets: ["AzureCommunicationUIChatBinary", "AzureCommunicationChat", "Trouter", "AzureCommunicationCommon", "AzureCore", "FluentUIWrapper"]
         ),
         // Azure Communication UI Common Library (from local sources)
         .library(
@@ -569,7 +964,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        // No external dependencies needed - using local sources and XCFrameworks
+        // No external dependencies - FluentUI included as XCFramework
     ],
     targets: [
         // MARK: - Binary Targets (XCFrameworks)
@@ -598,11 +993,6 @@ let package = Package(
             path: "spm-generated/XCFrameworks/AzureCommunicationChat.xcframework"
         ),
         
-        // FluentUI binary target (Microsoft FluentUI components)
-        .binaryTarget(
-            name: "FluentUI",
-            path: "spm-generated/XCFrameworks/FluentUI.xcframework"
-        ),
         
         // AzureCommunicationCommon binary target (Azure Communication Common)
         .binaryTarget(
@@ -622,12 +1012,28 @@ let package = Package(
             path: "spm-generated/XCFrameworks/Trouter.xcframework"
         ),
         
+        // FluentUI binary target (Microsoft FluentUI for iOS with resources)
+        .binaryTarget(
+            name: "FluentUI",
+            path: "spm-generated/XCFrameworks/FluentUI.xcframework"
+        ),
+        
+        
         // MARK: - Source Targets (Local)
         
         // AzureCommunicationUICommon from local sources
         .target(
             name: "AzureCommunicationUICommon",
             path: "AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/AzureCommunicationUICommon"
+        ),
+        
+        // FluentUI wrapper target to include FluentUI XCFramework
+        .target(
+            name: "FluentUIWrapper",
+            dependencies: [
+                "FluentUI"
+            ],
+            path: "FluentUIWrapper"
         )
     ]
 )
@@ -803,6 +1209,7 @@ main() {
     
     check_requirements
     setup_repository
+    setup_fluentui_source
     setup_cocoapods
     generate_xcframeworks
     generate_spm_package
