@@ -759,7 +759,6 @@ generate_spm_package() {
     # Create directory structure
     mkdir -p "$OUTPUT_DIR/spm-generated/XCFrameworks"
     mkdir -p "$OUTPUT_DIR/AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources"
-    mkdir -p "$OUTPUT_DIR/FluentUIWrapper"
     
     # Copy XCFrameworks
     log_info "Copying XCFrameworks to output directory..."
@@ -784,30 +783,29 @@ generate_spm_package() {
     
     cp -r "$common_source_path" "$OUTPUT_DIR/AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/"
     
-    # FluentUI is now built as XCFramework, no need to copy source
+    # Copy FluentUI source files for source target
+    log_info "Copying FluentUI source files..."
     
-    # Create FluentUIWrapper target
-    log_info "Creating FluentUIWrapper target..."
-    cat > "$OUTPUT_DIR/FluentUIWrapper/FluentUIWrapper.swift" << 'EOF'
-import FluentUI
-import Foundation
-
-// FluentUI Wrapper
-// This wrapper target ensures that FluentUI XCFramework is properly linked with the Azure Communication UI libraries
-// FluentUI XCFramework now includes resources built from source with proper SPM configuration
-public struct FluentUIWrapper {
+    # Find FluentUI source in the repo
+    local fluentui_source_path=""
+    if [[ -d "$TEMP_DIR/repo/sdk/fluentui-apple" ]]; then
+        fluentui_source_path="$TEMP_DIR/repo/sdk/fluentui-apple"
+    elif [[ -d "$TEMP_DIR/repo/AzureCommunicationUI/sdk/fluentui-apple" ]]; then
+        fluentui_source_path="$TEMP_DIR/repo/AzureCommunicationUI/sdk/fluentui-apple"
+    else
+        log_error "Could not find FluentUI source files"
+        exit 1
+    fi
     
-    // Initialize FluentUI - resources are now included in the XCFramework
-    public static func initialize() {
-        // FluentUI XCFramework built from properly configured source includes resources
-        print("FluentUIWrapper initialized - FluentUI XCFramework with resources")
-    }
-}
-EOF
+    log_info "Copying FluentUI from: $fluentui_source_path"
+    cp -r "$fluentui_source_path" "$OUTPUT_DIR/FluentUI"
     
     # Generate Package.swift from template
     log_info "Generating Package.swift..."
-    cat > "$OUTPUT_DIR/Package.swift" << 'EOF'
+    cp "$SCRIPT_DIR/templates/Package.swift.template" "$OUTPUT_DIR/Package.swift"
+    
+    # Template copied, skipping hardcoded generation
+    : << 'EOF'
 // swift-tools-version: 5.7
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 

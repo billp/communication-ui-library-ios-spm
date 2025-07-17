@@ -21,7 +21,7 @@ let package = Package(
         // Azure Communication UI Chat Library (XCFramework binary)
         .library(
             name: "AzureCommunicationUIChat",
-            targets: ["AzureCommunicationUIChatBinary", "AzureCommunicationChat", "FluentUI", "AzureCommunicationCommon", "AzureCore"]
+            targets: ["AzureCommunicationUIChatBinary", "AzureCommunicationChat", "Trouter", "FluentUI", "AzureCommunicationCommon", "AzureCore"]
         ),
         // Azure Communication UI Common Library (from local sources)
         .library(
@@ -100,7 +100,21 @@ let package = Package(
             dependencies: [
                 .target(name: "FluentUIResources")
             ],
-            path: "FluentUI/ios/FluentUI"
+            path: "FluentUI/ios/FluentUI",
+            exclude: [
+                "Avatar/Avatar.resources.xcfilelist",
+                "BarButtonItems/BarButtonItems.resources.xcfilelist",
+                "Bottom Commanding/BottomCommanding.resources.xcfilelist",
+                "Core/Core.resources.xcfilelist",
+                "HUD/HUD.resources.xcfilelist",
+                "Navigation/Navigation.resources.xcfilelist",
+                "Notification/Notification.resources.xcfilelist",
+                "Other Cells/OtherCells.resources.xcfilelist",
+                "Resources/Localization/CultureMapping.json",
+                "Table View/TableView.resources.xcfilelist",
+                "Tooltip/Tooltip.resources.xcfilelist",
+                "TwoLineTitleView/TwoLineTitleView.resources.xcfilelist"
+            ],
             resources: [
                 .process("Resources")
             ]
