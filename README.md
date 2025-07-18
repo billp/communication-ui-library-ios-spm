@@ -162,3 +162,37 @@ The script uses the `cocoapods-spm` gem to properly integrate FluentUI during th
 All XCFrameworks support universal architectures:
 - **iOS Device**: arm64 (iPhone/iPad)
 - **iOS Simulator**: arm64 + x86_64 (Apple Silicon + Intel Macs)
+
+## ⚠️ Known Issues
+
+### FluentUI Duplicate Class Warnings
+When using both `AzureCommunicationUICalling` and `AzureCommunicationUIChat` frameworks in the same app, you may see console warnings about duplicate FluentUI classes:
+
+```
+objc[]: Class _TtC12FluentUI_ios14TabBarItemView is implemented in both [...]/AzureCommunicationUICalling.framework/AzureCommunicationUICalling and [...]/AzureCommunicationUIChat.framework/AzureCommunicationUIChat. One of the duplicates must be removed or renamed.
+```
+
+**This is expected behavior and safe to ignore because:**
+- ✅ **App functionality is not affected** - Both calling and chat features work correctly
+- ✅ **Identical implementations** - Both frameworks contain the same FluentUI version
+- ✅ **Runtime handles gracefully** - Objective-C runtime picks one implementation consistently
+- ✅ **No crashes occur** - These are warnings, not errors
+
+**Root Cause:** FluentUI is embedded in both frameworks during the cocoapods-spm build process to ensure each framework is self-contained. When both frameworks are loaded, the Objective-C runtime detects the duplicate classes but continues to function normally.
+
+**Suppressing the Warnings:** If you want to silence these warnings completely, set the `OBJC_DISABLE_DUPLICATE_CLASS_WARNINGS` environment variable in your app:
+
+**Method 1: Xcode Scheme (Recommended)**
+1. Edit Scheme → Run → Environment Variables
+2. Add: `OBJC_DISABLE_DUPLICATE_CLASS_WARNINGS = YES`
+
+**Method 2: In Code**
+```swift
+// In AppDelegate or App.swift
+func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    setenv("OBJC_DISABLE_DUPLICATE_CLASS_WARNINGS", "YES", 1)
+    return true
+}
+```
+
+**Alternative:** Filter warnings in Xcode's console by adding `-objc[` to the filter, but no action is required for app functionality.
