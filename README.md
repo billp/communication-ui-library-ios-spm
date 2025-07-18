@@ -43,9 +43,9 @@ This automation tool successfully creates complete SPM packages from any tag of 
 - ✅ Creates complete SPM package structure
 - ✅ Copies all XCFrameworks with proper paths
 - ✅ Includes source code for common components
-- ✅ Copies FluentUI source code for importable targets
+- ✅ Creates minimal FluentUI module interface
 - ✅ Generates Package.swift from template
-- ✅ FluentUI hybrid integration: embedded in Azure frameworks + importable source targets
+- ✅ FluentUI hybrid integration: embedded in Azure frameworks + minimal module interface
 
 ### Phase 5: Validation & Testing
 - ✅ Tests package resolution with Swift Package Manager
@@ -59,7 +59,6 @@ This automation tool successfully creates complete SPM packages from any tag of 
 - **AzureCommunicationUICalling** - Complete calling UI experience (includes embedded FluentUI)
 - **AzureCommunicationUIChat** - Complete chat UI experience (includes embedded FluentUI and Trouter)
 - **AzureCommunicationUICommon** - Common utilities and components
-- **FluentUI** - FluentUI library (optional direct import - also embedded in UI libraries)
 
 ### Architecture Support
 - **iOS Device**: arm64 (iPhone/iPad)
@@ -122,8 +121,7 @@ targets: [
             .product(name: "AzureCommunicationCalling", package: "AzureCommunicationUI"),
             .product(name: "AzureCommunicationUICalling", package: "AzureCommunicationUI"),
             .product(name: "AzureCommunicationUIChat", package: "AzureCommunicationUI"),
-            .product(name: "AzureCommunicationUICommon", package: "AzureCommunicationUI"),
-            .product(name: "FluentUI", package: "AzureCommunicationUI") // Optional direct import
+            .product(name: "AzureCommunicationUICommon", package: "AzureCommunicationUI")
         ]
     )
 ]
@@ -135,18 +133,24 @@ import AzureCommunicationCalling      // Calling SDK
 import AzureCommunicationUICalling    // Calling UI Library (includes embedded FluentUI)
 import AzureCommunicationUIChat       // Chat UI Library (includes embedded FluentUI)
 import AzureCommunicationUICommon     // Common utilities
-import FluentUI                       // FluentUI library (optional - also embedded in UI libraries)
 ```
 
 ## 🔧 Technical Notes
 
 ### FluentUI Integration
-The package uses a **hybrid approach** with FluentUI both embedded within Azure Communication UI XCFrameworks AND available as importable source targets. This ensures:
+The package uses a **minimal module interface approach** with FluentUI embedded within Azure Communication UI XCFrameworks and minimal Swift stubs for module resolution. This ensures:
 - ✅ **API Compatibility**: FluentUI version matches exactly what Azure Communication SDK expects
-- ✅ **Runtime Stability**: Embedded FluentUI avoids crashes from API differences
-- ✅ **Module Import Support**: Azure frameworks can internally import FluentUI module
-- ✅ **Optional Direct Import**: Developers can optionally import FluentUI directly
-- ✅ **No Conflicts**: Embedded and importable FluentUI work together seamlessly
+- ✅ **Runtime Stability**: Only embedded FluentUI implementation runs - no conflicts
+- ✅ **Module Import Support**: Minimal Swift stubs satisfy internal `import FluentUI` statements
+- ✅ **Crash Prevention**: Eliminates duplicate FluentUI implementations that caused DynamicColor crashes
+- ✅ **Clean Dependencies**: Minimal interface without competing implementations or resources
+
+### Minimal Module Interface Approach
+The script creates minimal Swift stub files that provide just enough module interface to satisfy imports without competing implementations:
+- **Empty Swift classes** satisfy `import FluentUI` statements in Azure frameworks
+- **No actual implementation** - all FluentUI functionality comes from embedded version
+- **No resource conflicts** - only embedded FluentUI resources are used
+- **Runtime stability** - single source of FluentUI implementation eliminates crashes
 
 ### cocoapods-spm Integration
 The script uses the `cocoapods-spm` gem to properly integrate FluentUI during the build process:
