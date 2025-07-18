@@ -164,3 +164,6 @@ venv.bak/
 *.tar.gz
 *.rar
 *.7z
+
+# Claude Code files
+.claude
