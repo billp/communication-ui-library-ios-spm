@@ -179,20 +179,3 @@ objc[]: Class _TtC12FluentUI_ios14TabBarItemView is implemented in both [...]/Az
 - ✅ **No crashes occur** - These are warnings, not errors
 
 **Root Cause:** FluentUI is embedded in both frameworks during the cocoapods-spm build process to ensure each framework is self-contained. When both frameworks are loaded, the Objective-C runtime detects the duplicate classes but continues to function normally.
-
-**Suppressing the Warnings:** If you want to silence these warnings completely, set the `OBJC_DISABLE_DUPLICATE_CLASS_WARNINGS` environment variable in your app:
-
-**Method 1: Xcode Scheme (Recommended)**
-1. Edit Scheme → Run → Environment Variables
-2. Add: `OBJC_DISABLE_DUPLICATE_CLASS_WARNINGS = YES`
-
-**Method 2: In Code**
-```swift
-// In AppDelegate or App.swift
-func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-    setenv("OBJC_DISABLE_DUPLICATE_CLASS_WARNINGS", "YES", 1)
-    return true
-}
-```
-
-**Alternative:** Filter warnings in Xcode's console by adding `-objc[` to the filter, but no action is required for app functionality.
