@@ -651,8 +651,8 @@ generate_xcframeworks() {
         fi
     done
     
-    # FluentUI is now used as source target dependency - no XCFramework needed
-    log_info "FluentUI will be used as source target (no XCFramework generation needed)"
+    # FluentUI hybrid approach: embedded in Azure XCFrameworks + available as source targets
+    log_info "FluentUI uses hybrid approach: embedded in Azure XCFrameworks + available as importable source targets"
     
     # For Chat, we also need AzureCommunicationChat SDK
     log_info "Creating XCFramework for AzureCommunicationChat..."
@@ -783,8 +783,28 @@ generate_spm_package() {
     
     cp -r "$common_source_path" "$OUTPUT_DIR/AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/"
     
-    # FluentUI is embedded in Azure XCFrameworks - no separate source needed
-    log_info "FluentUI is embedded in Azure XCFrameworks via cocoapods-spm integration"
+    # Copy FluentUI source for hybrid approach (embedded + importable)
+    log_info "Copying FluentUI source for hybrid approach (embedded + importable)..."
+    
+    # Copy FluentUI source from the script's temporary FluentUI checkout
+    local fluentui_source_path=""
+    if [[ -d "$TEMP_DIR/repo/AzureCommunicationUI/sdk/fluentui-apple" ]]; then
+        fluentui_source_path="$TEMP_DIR/repo/AzureCommunicationUI/sdk/fluentui-apple"
+    elif [[ -d "$TEMP_DIR/repo/sdk/fluentui-apple" ]]; then
+        fluentui_source_path="$TEMP_DIR/repo/sdk/fluentui-apple"
+    else
+        log_error "Could not find FluentUI source directory"
+        log_error "Checked locations:"
+        log_error "  - $TEMP_DIR/repo/AzureCommunicationUI/sdk/fluentui-apple"
+        log_error "  - $TEMP_DIR/repo/sdk/fluentui-apple"
+        exit 1
+    fi
+    
+    log_info "Copying FluentUI source from: $fluentui_source_path"
+    cp -r "$fluentui_source_path" "$OUTPUT_DIR/FluentUI"
+    
+    log_success "FluentUI source copied successfully"
+    log_info "FluentUI is now available as both embedded (in Azure XCFrameworks) and importable (source targets)"
     
     # Generate Package.swift from template
     log_info "Generating Package.swift..."

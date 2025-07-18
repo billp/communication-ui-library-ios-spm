@@ -28,6 +28,11 @@ let package = Package(
             name: "AzureCommunicationUICommon",
             targets: ["AzureCommunicationUICommon"]
         ),
+        // FluentUI Library (from local sources - optional direct import)
+        .library(
+            name: "FluentUI",
+            targets: ["FluentUI", "FluentUIResources"]
+        ),
     ],
     dependencies: [
         // No external dependencies needed - using local sources and XCFrameworks
@@ -87,6 +92,28 @@ let package = Package(
             path: "AzureCommunicationUI/sdk/AzureCommunicationUICommon/Sources/AzureCommunicationUICommon",
             linkerSettings: [
                 .linkedFramework("UIKit", .when(platforms: [.iOS]))
+            ]
+        ),
+        
+        // FluentUI from local sources
+        .target(
+            name: "FluentUI",
+            dependencies: ["FluentUIResources"],
+            path: "FluentUI/ios/FluentUI",
+            resources: [
+                .process("Resources")
+            ],
+            linkerSettings: [
+                .linkedFramework("UIKit", .when(platforms: [.iOS]))
+            ]
+        ),
+        
+        // FluentUIResources from local sources
+        .target(
+            name: "FluentUIResources",
+            path: "FluentUI/apple",
+            resources: [
+                .process("Resources")
             ]
         )
     ]
