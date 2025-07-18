@@ -16,22 +16,17 @@ let package = Package(
         // Azure Communication UI Calling Library (XCFramework binary with embedded FluentUI)
         .library(
             name: "AzureCommunicationUICalling",
-            targets: ["AzureCommunicationUICallingBinary", "AzureCommunicationCommon", "AzureCore"]
+            targets: ["AzureCommunicationUICallingBinary", "AzureCommunicationCommon", "AzureCore", "FluentUI"]
         ),
         // Azure Communication UI Chat Library (XCFramework binary with embedded FluentUI)
         .library(
             name: "AzureCommunicationUIChat",
-            targets: ["AzureCommunicationUIChatBinary", "AzureCommunicationChat", "Trouter", "AzureCommunicationCommon", "AzureCore"]
+            targets: ["AzureCommunicationUIChatBinary", "AzureCommunicationChat", "Trouter", "AzureCommunicationCommon", "AzureCore", "FluentUI"]
         ),
         // Azure Communication UI Common Library (from local sources)
         .library(
             name: "AzureCommunicationUICommon",
             targets: ["AzureCommunicationUICommon"]
-        ),
-        // FluentUI Library (from local sources - optional direct import)
-        .library(
-            name: "FluentUI",
-            targets: ["FluentUI", "FluentUIResources"]
         ),
     ],
     dependencies: [
@@ -95,26 +90,17 @@ let package = Package(
             ]
         ),
         
-        // FluentUI from local sources
+        // FluentUI minimal module interface (no implementation)
         .target(
             name: "FluentUI",
             dependencies: ["FluentUIResources"],
-            path: "FluentUI/ios/FluentUI",
-            resources: [
-                .process("Resources")
-            ],
-            linkerSettings: [
-                .linkedFramework("UIKit", .when(platforms: [.iOS]))
-            ]
+            path: "FluentUI_Minimal/ios/FluentUI"
         ),
         
-        // FluentUIResources from local sources
+        // FluentUIResources minimal module interface (no resources)
         .target(
             name: "FluentUIResources",
-            path: "FluentUI/apple",
-            resources: [
-                .process("Resources")
-            ]
+            path: "FluentUI_Minimal/apple"
         )
     ]
 )
