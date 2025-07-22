@@ -79,12 +79,15 @@ This automation tool successfully creates complete SPM packages from any tag of 
 
 ## 📋 Requirements
 
-Before running the script, ensure you have:
+### Always Required
+- **Git** - For repository cloning and operations
 
+### Required Only for Fresh Builds (when no prebuild cache available)
 - **Xcode** (with xcodebuild command line tools)
 - **CocoaPods** (`gem install cocoapods`)
 - **Swift Package Manager** (included with Xcode)
-- **Git**
+
+*Note: If a prebuild cache is available for your requested tag, the script will use it automatically and skip the build requirements above.*
 
 ## 🔧 Usage Examples
 
