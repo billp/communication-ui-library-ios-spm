@@ -22,6 +22,7 @@ OUTPUT_DIR="./output"
 GIT_TAG=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMP_DIR=""
+FORCE_BUILD=false
 
 # Logging functions
 log_info() {
@@ -42,6 +43,356 @@ log_error() {
 
 log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
+}
+
+# Function to confirm output directory removal if it exists
+confirm_output_directory() {
+    if [[ -d "$OUTPUT_DIR" ]]; then
+        echo -n "Output directory '$OUTPUT_DIR' already exists. Remove it? [y/N]: "
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            rm -rf "$OUTPUT_DIR"
+            log_info "Removed existing output directory"
+        else
+            log_error "Cannot proceed with existing output directory"
+            exit 1
+        fi
+    fi
+}
+
+# Function to show final usage instructions
+show_final_instructions() {
+    log_success "Package location: $OUTPUT_DIR"
+    log_info ""
+    log_info "Next steps:"
+    log_info "1. Navigate to the output directory"
+    log_info "2. Add the package to your iOS project"
+    log_info "3. Import the required modules in your Swift code"
+    log_info ""
+    log_info "Available imports:"
+    log_info "  - import AzureCommunicationCalling"
+    log_info "  - import AzureCommunicationUICalling"
+    log_info "  - import AzureCommunicationUIChat"
+    log_info "  - import AzureCommunicationUICommon"
+}
+
+# Function to detect MD5 command (macOS uses 'md5', Linux uses 'md5sum')
+get_md5_command() {
+    if command -v md5sum &> /dev/null; then
+        echo "md5sum"
+    elif command -v md5 &> /dev/null; then
+        echo "md5"
+    else
+        log_error "Neither md5sum nor md5 command found"
+        exit 1
+    fi
+}
+
+# Function to calculate MD5 hash of a file
+calculate_md5() {
+    local file="$1"
+    local md5_cmd=$(get_md5_command)
+    
+    if [[ "$md5_cmd" == "md5sum" ]]; then
+        # Linux: md5sum outputs "hash  filename"
+        md5sum "$file" | cut -d' ' -f1
+    else
+        # macOS: md5 outputs "MD5 (filename) = hash"
+        md5 "$file" | sed 's/.*= //'
+    fi
+}
+
+# Function to update or append hash entry in hashes.md5 file
+update_hash_file() {
+    local hash_file="$1"
+    local new_hash="$2"
+    local tag="$3"
+    
+    # Create the hash file if it doesn't exist
+    touch "$hash_file"
+    
+    # Check if an entry for this tag already exists
+    if grep -q "  ${tag}.zip$" "$hash_file"; then
+        # Replace existing entry
+        log_info "Updating existing hash entry for $tag"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS sed
+            sed -i '' "/  ${tag}\.zip$/c\\
+${new_hash}  ${tag}.zip" "$hash_file"
+        else
+            # Linux sed
+            sed -i "/  ${tag}\.zip$/c\\${new_hash}  ${tag}.zip" "$hash_file"
+        fi
+    else
+        # Append new entry
+        log_info "Adding new hash entry for $tag"
+        echo "${new_hash}  ${tag}.zip" >> "$hash_file"
+    fi
+}
+
+# Function to validate file against hash
+validate_file_hash() {
+    local file="$1"
+    local expected_hash="$2"
+    
+    if [[ ! -f "$file" ]]; then
+        return 1
+    fi
+    
+    local actual_hash=$(calculate_md5 "$file")
+    if [[ "$actual_hash" == "$expected_hash" ]]; then
+        return 0
+    else
+        log_warning "Hash mismatch for $(basename "$file"): expected $expected_hash, got $actual_hash"
+        return 1
+    fi
+}
+
+# Function to get hash for a tag from hash file
+get_hash_for_tag() {
+    local hash_file="$1"
+    local tag="$2"
+    
+    if [[ -f "$hash_file" ]]; then
+        # Look for the tag.zip pattern with flexible whitespace
+        grep "[[:space:]]*${tag}.zip$" "$hash_file" | awk '{print $1}'
+    fi
+}
+
+# Function to check and use remote prebuild cache
+check_remote_prebuild_cache() {
+    local tag="$1"
+    local remote_base_url="https://github.com/billp/communication-ui-library-ios-spm-exported/raw/refs/heads/main/prebuild"
+    local remote_zip_url="${remote_base_url}/${tag}.zip"
+    local remote_hash_url="${remote_base_url}/hashes.md5"
+    local local_prebuild_dir="$SCRIPT_DIR/prebuild"
+    local local_zip_file="$local_prebuild_dir/${tag}.zip"
+    local local_hash_file="$local_prebuild_dir/hashes.md5"
+    local temp_hash_file="/tmp/remote_hashes_$$"
+    
+    log_step "Checking remote prebuild cache for tag: $tag"
+    
+    # Create prebuild directory if it doesn't exist
+    mkdir -p "$local_prebuild_dir"
+    
+    # First, try to download the remote hash file
+    log_info "Downloading remote hash file..."
+    if curl -s -f -L "$remote_hash_url" -o "$temp_hash_file"; then
+        log_success "Downloaded remote hash file"
+        
+        # Get expected hash for this tag from remote hash file
+        local expected_hash=$(get_hash_for_tag "$temp_hash_file" "$tag")
+        
+        if [[ -n "$expected_hash" ]]; then
+            log_info "Found hash for $tag in remote hash file: $expected_hash"
+            
+            # Download and validate with hash
+            log_info "Downloading remote prebuild cache: $remote_zip_url"
+            if curl -s -f -L "$remote_zip_url" -o "$local_zip_file"; then
+                log_success "Downloaded remote prebuild cache"
+                
+                # Validate the downloaded file against remote hash (authoritative)
+                if validate_file_hash "$local_zip_file" "$expected_hash"; then
+                    log_success "Remote cache validation successful"
+                    
+                    # Update local hash file with remote hash
+                    update_hash_file "$local_hash_file" "$expected_hash" "$tag"
+                    
+                    # Extract to output directory
+                    log_info "Extracting remote prebuild cache to output directory..."
+                    confirm_output_directory
+                    unzip -q "$local_zip_file" -d "$OUTPUT_DIR"
+                    
+                    if [[ $? -eq 0 ]]; then
+                        log_success "🎉 Using remote prebuild cache for $tag (hash validated)"
+                        show_final_instructions
+                        return 0
+                    else
+                        log_error "Failed to extract remote cache"
+                        rm -f "$local_zip_file"
+                    fi
+                else
+                    log_error "Remote cache validation failed"
+                    rm -f "$local_zip_file"
+                fi
+            else
+                log_info "Remote prebuild cache not found for $tag"
+            fi
+        else
+            log_info "No hash found for $tag in remote hash file"
+            
+            # Fallback: Try to download zip directly without hash validation
+            log_info "Attempting direct download without hash validation..."
+            log_info "Downloading remote prebuild cache: $remote_zip_url"
+            if curl -s -f -L "$remote_zip_url" -o "$local_zip_file"; then
+                log_success "Downloaded remote prebuild cache"
+                log_warning "No remote hash available - skipping validation"
+                
+                # Calculate hash of downloaded file
+                local calculated_hash=$(calculate_md5 "$local_zip_file")
+                log_info "Calculated hash: $calculated_hash"
+                
+                # Update local hash file with calculated hash
+                update_hash_file "$local_hash_file" "$calculated_hash" "$tag"
+                
+                # Extract to output directory
+                log_info "Extracting remote prebuild cache to output directory..."
+                confirm_output_directory
+                unzip -q "$local_zip_file" -d "$OUTPUT_DIR"
+                
+                if [[ $? -eq 0 ]]; then
+                    log_success "🎉 Using remote prebuild cache for $tag (no validation)"
+                    show_final_instructions
+                    return 0
+                else
+                    log_error "Failed to extract remote cache"
+                    rm -f "$local_zip_file"
+                fi
+            else
+                log_info "Remote prebuild cache not found for $tag"
+            fi
+        fi
+        
+        # Clean up temp hash file
+        rm -f "$temp_hash_file"
+    else
+        log_info "Could not download remote hash file"
+        
+        # Fallback: Try to download zip directly without any hash validation
+        log_info "Attempting direct zip download without hash file..."
+        log_info "Downloading remote prebuild cache: $remote_zip_url"
+        if curl -s -f -L "$remote_zip_url" -o "$local_zip_file"; then
+            log_success "Downloaded remote prebuild cache"
+            log_warning "No remote hash file available - skipping validation"
+            
+            # Calculate hash of downloaded file
+            local calculated_hash=$(calculate_md5 "$local_zip_file")
+            log_info "Calculated hash: $calculated_hash"
+            
+            # Update local hash file with calculated hash
+            update_hash_file "$local_hash_file" "$calculated_hash" "$tag"
+            
+            # Extract to output directory
+            log_info "Extracting remote prebuild cache to output directory..."
+            confirm_output_directory
+            unzip -q "$local_zip_file" -d "$OUTPUT_DIR"
+            
+            if [[ $? -eq 0 ]]; then
+                log_success "🎉 Using remote prebuild cache for $tag (no validation)"
+                show_final_instructions
+                return 0
+            else
+                log_error "Failed to extract remote cache"
+                rm -f "$local_zip_file"
+            fi
+        else
+            log_info "Remote prebuild cache not found for $tag"
+        fi
+    fi
+    
+    return 1
+}
+
+# Function to check and use local prebuild cache
+check_local_prebuild_cache() {
+    local tag="$1"
+    local local_prebuild_dir="$SCRIPT_DIR/prebuild"
+    local local_zip_file="$local_prebuild_dir/${tag}.zip"
+    local local_hash_file="$local_prebuild_dir/hashes.md5"
+    
+    log_step "Checking local prebuild cache for tag: $tag"
+    
+    if [[ ! -f "$local_zip_file" ]]; then
+        log_info "No local prebuild cache found for $tag"
+        return 1
+    fi
+    
+    # Get expected hash from local hash file
+    local expected_hash=$(get_hash_for_tag "$local_hash_file" "$tag")
+    
+    if [[ -n "$expected_hash" ]]; then
+        log_info "Found local prebuild cache, validating against local hash..."
+        
+        if validate_file_hash "$local_zip_file" "$expected_hash"; then
+            log_success "Local cache validation successful"
+            
+            # Extract to output directory
+            log_info "Extracting local prebuild cache to output directory..."
+            confirm_output_directory
+            unzip -q "$local_zip_file" -d "$OUTPUT_DIR"
+            
+            if [[ $? -eq 0 ]]; then
+                log_success "🎉 Using local prebuild cache for $tag (hash validated)"
+                show_final_instructions
+                return 0
+            else
+                log_error "Failed to extract local cache"
+            fi
+        else
+            log_error "Local cache validation failed - cache may be corrupted"
+            log_info "Deleting corrupted cache file"
+            rm -f "$local_zip_file"
+            return 1
+        fi
+    else
+        log_warning "No hash found for $tag in local hash file"
+        log_info "Using local cache without validation..."
+        
+        # Calculate hash for future validation
+        local calculated_hash=$(calculate_md5 "$local_zip_file")
+        log_info "Calculated hash: $calculated_hash"
+        
+        # Update local hash file with calculated hash
+        update_hash_file "$local_hash_file" "$calculated_hash" "$tag"
+        
+        # Extract to output directory
+        log_info "Extracting local prebuild cache to output directory..."
+        confirm_output_directory
+        unzip -q "$local_zip_file" -d "$OUTPUT_DIR"
+        
+        if [[ $? -eq 0 ]]; then
+            log_success "🎉 Using local prebuild cache for $tag (no validation)"
+            show_final_instructions
+            return 0
+        else
+            log_error "Failed to extract local cache"
+        fi
+    fi
+    
+    return 1
+}
+
+# Function to save prebuild cache after successful build
+save_prebuild_cache() {
+    local tag="$1"
+    local local_prebuild_dir="$SCRIPT_DIR/prebuild"
+    local local_zip_file="$local_prebuild_dir/${tag}.zip"
+    local local_hash_file="$local_prebuild_dir/hashes.md5"
+    
+    log_step "Saving prebuild cache for tag: $tag"
+    
+    # Create prebuild directory if it doesn't exist
+    mkdir -p "$local_prebuild_dir"
+    
+    # Create zip archive of the output directory
+    log_info "Creating zip archive of output directory..."
+    cd "$OUTPUT_DIR"
+    zip -r -q "$local_zip_file" .
+    
+    if [[ $? -eq 0 ]]; then
+        log_success "Created prebuild cache: $(basename "$local_zip_file")"
+        
+        # Calculate MD5 hash
+        local md5_hash=$(calculate_md5 "$local_zip_file")
+        log_success "MD5 hash: $md5_hash"
+        log_info "Save this hash for verification when uploading to remote repository"
+        
+        # Update local hash file
+        update_hash_file "$local_hash_file" "$md5_hash" "$tag"
+        log_success "Updated local hash file"
+    else
+        log_error "Failed to create prebuild cache"
+    fi
 }
 
 # Function to get latest tag
@@ -120,6 +471,7 @@ OPTIONS:
     -t, --tag <GIT_TAG>           Git tag to checkout (required unless --latest is used)
     -l, --latest                  Use the latest available tag (alternative to --tag)
     -o, --output-dir <OUTPUT_DIR> Output directory (default: ./output)
+    --force-build                 Skip all cache checks and force a fresh build
     --available-tags              Show available tags from the repository
     -h, --help                    Show this help message
 
@@ -128,6 +480,7 @@ EXAMPLES:
     ./generate-spm-package.sh --latest
     ./generate-spm-package.sh --tag "AzureCommunicationUICalling_1.14.1"
     ./generate-spm-package.sh --latest --output-dir "/path/to/output"
+    ./generate-spm-package.sh --tag "AzureCommunicationUICalling_1.14.1" --force-build
 
 DESCRIPTION:
     This script automates the generation of a Swift Package Manager package
@@ -171,6 +524,11 @@ parse_args() {
                 OUTPUT_DIR="$2"
                 shift 2
                 ;;
+            --force-build)
+                FORCE_BUILD=true
+                log_info "Force build flag set to: $FORCE_BUILD"
+                shift
+                ;;
             --available-tags)
                 show_available_tags
                 exit 0
@@ -205,8 +563,14 @@ parse_args() {
         exit 1
     fi
     
-    # Convert OUTPUT_DIR to absolute path to avoid issues when changing directories
-    OUTPUT_DIR=$(mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && pwd)
+    # Convert OUTPUT_DIR to absolute path without creating directory
+    if [[ "$OUTPUT_DIR" = /* ]]; then
+        # Already absolute path
+        OUTPUT_DIR="$OUTPUT_DIR"
+    else
+        # Relative path - convert to absolute
+        OUTPUT_DIR="$(cd "$(dirname "$OUTPUT_DIR")" 2>/dev/null && pwd)/$(basename "$OUTPUT_DIR")" || OUTPUT_DIR="$(pwd)/$OUTPUT_DIR"
+    fi
 }
 
 # Cleanup function
@@ -332,9 +696,7 @@ setup_fluentui_source() {
     log_info "Current FluentUI entries in Podfile:"
     grep -n "FluentUI" Podfile || log_info "No FluentUI entries found in Podfile"
     
-    # Show full Podfile content first
-    log_info "Current complete Podfile content:"
-    cat Podfile
+    # Podfile content available for debugging if needed
     
     # Create sdk directory if it doesn't exist
     mkdir -p sdk
@@ -360,17 +722,12 @@ setup_fluentui_source() {
     # Create a backup
     cp Package.swift Package.swift.backup
     
-    # First, let's see the current content
-    log_info "Current FluentUI Package.swift structure:"
-    grep -n -A 5 -B 5 "FluentUIResources\|FluentUI_ios" Package.swift || true
-    
     # Add resources configuration to FluentUI Package.swift
     log_info "Adding resources configuration to FluentUI Package.swift..."
     
     # Check what resources exist
     if [[ -d "ios/FluentUI/Resources" ]]; then
-        log_info "Found FluentUI iOS resources directory:"
-        ls -la ios/FluentUI/Resources/ | head -5
+        log_info "Found FluentUI iOS resources directory"
     fi
     
     # Use a more precise approach to add resources configuration
@@ -406,9 +763,8 @@ with open('Package.swift', 'w') as f:
 print("Successfully modified Package.swift")
 EOF
     
-    # Verify the changes
-    log_info "Modified FluentUI Package.swift - checking for resources blocks:"
-    grep -n -A 10 -B 5 "resources:" Package.swift || log_warning "Resources block may not have been added correctly"
+    # Package.swift modified for resources configuration
+    log_success "FluentUI Package.swift updated with resources configuration"
     
     # Go back to the main repo directory for Podfile modification
     if [[ -f "$TEMP_DIR/repo/AzureCommunicationUI/Podfile" ]]; then
@@ -437,9 +793,7 @@ EOF
 # Use FluentUI from local SPM source\
 spm_pkg "FluentUI", :path => "./sdk/fluentui-apple"' Podfile
         
-        # Show the modified Podfile
-        log_info "Modified Podfile content:"
-        cat Podfile
+        log_info "Podfile modified to use FluentUI from local SPM source"
     else
         log_info "No FluentUI CocoaPods dependency found in Podfile"
         log_info "Adding spm_pkg entry for FluentUI anyway..."
@@ -453,9 +807,7 @@ spm_pkg "FluentUI", :path => "./sdk/fluentui-apple"' Podfile
 # Use FluentUI from local SPM source\
 spm_pkg "FluentUI", :path => "./sdk/fluentui-apple"' Podfile
         
-        # Show the modified Podfile
-        log_info "Modified Podfile content:"
-        cat Podfile
+        log_info "Podfile modified to use FluentUI from local SPM source"
     fi
     
     log_success "FluentUI source setup completed"
@@ -1085,6 +1437,30 @@ main() {
     log_info "Configuration:"
     log_info "  Git Tag: $GIT_TAG"
     log_info "  Output Directory: $OUTPUT_DIR"
+    log_info "  Force Build: $FORCE_BUILD"
+    log_info ""
+    
+    # Check prebuild cache first (local then remote)
+    if [[ "$FORCE_BUILD" == "true" ]]; then
+        log_info "Force build specified (--force-build) - skipping all cache checks"
+    else
+        log_info "Debug: Starting cache checks..."
+        if check_local_prebuild_cache "$GIT_TAG"; then
+            # Local cache found and used successfully
+            log_info "Debug: Local cache used successfully"
+            return 0
+        fi
+        
+        log_info "Debug: Local cache not found, checking remote cache"
+        if check_remote_prebuild_cache "$GIT_TAG"; then
+            # Remote cache found and used successfully
+            log_info "Debug: Remote cache used successfully"
+            return 0
+        fi
+    fi
+    
+    # No cache found, proceed with full build
+    log_info "No prebuild cache found, proceeding with full build..."
     log_info ""
     
     check_requirements
@@ -1096,19 +1472,11 @@ main() {
     validate_package
     generate_documentation
     
+    # Save prebuild cache after successful build
+    save_prebuild_cache "$GIT_TAG"
+    
     log_success "🎉 SPM package generation completed successfully!"
-    log_success "Package location: $OUTPUT_DIR"
-    log_info ""
-    log_info "Next steps:"
-    log_info "1. Navigate to the output directory"
-    log_info "2. Add the package to your iOS project"
-    log_info "3. Import the required modules in your Swift code"
-    log_info ""
-    log_info "Available imports:"
-    log_info "  - import AzureCommunicationCalling"
-    log_info "  - import AzureCommunicationUICalling"
-    log_info "  - import AzureCommunicationUIChat"
-    log_info "  - import AzureCommunicationUICommon"
+    show_final_instructions
 }
 
 # Run main function

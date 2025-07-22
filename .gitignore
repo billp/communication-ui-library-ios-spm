@@ -165,5 +165,8 @@ venv.bak/
 *.rar
 *.7z
 
+# Prebuild cache files (keep hashes.md5 for validation)
+prebuild/*.zip
+
 # Claude Code files
 .claude

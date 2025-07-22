@@ -16,6 +16,27 @@ This automation tool successfully creates complete SPM packages from any tag of 
 ```
 
 
+## ⚡ Prebuild Cache System
+
+This tool includes an intelligent caching system that dramatically speeds up repeated builds:
+
+### Cache Hierarchy
+1. **Local Cache** - Instant access to previously built packages
+2. **Remote Cache** - Downloads from [GitHub repository](https://github.com/billp/communication-ui-library-ios-spm-exported/tree/main/prebuild) 
+3. **Fresh Build** - Full build from source (only when no cache available)
+
+### Cache Features
+- ✅ **MD5 Hash Validation** - Ensures integrity of cached packages
+- ✅ **Automatic Cache Creation** - Saves successful builds for future use
+- ✅ **Remote Distribution** - Share prebuilt packages via GitHub LFS
+- ✅ **Smart Fallbacks** - Graceful handling when validation fails
+- ✅ **Force Build Option** - Skip all caches when needed
+
+### Cache Locations
+- **Local**: `./prebuild/{tag}.zip` - Your local cache files
+- **Hashes**: `./prebuild/hashes.md5` - Hash validation file
+- **Remote**: `https://github.com/billp/communication-ui-library-ios-spm-exported/tree/main/prebuild`
+
 ## 🛠️ What the Script Does
 
 ### Phase 1: Repository Setup
@@ -100,10 +121,31 @@ Before running the script, ensure you have:
 ./generate-spm-package.sh --latest --output-dir "/path/to/custom/output"
 ```
 
+### Force Fresh Build (Skip All Caches)
+```bash
+./generate-spm-package.sh --tag "AzureCommunicationUICalling_1.14.2" --force-build
+```
+
 ### Help
 ```bash
 ./generate-spm-package.sh --help
 ```
+
+## 🎯 Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `-t, --tag <TAG>` | Git tag to checkout (required unless --latest is used) |
+| `-l, --latest` | Use the latest available tag (alternative to --tag) |
+| `-o, --output-dir <DIR>` | Output directory (default: ./output) |
+| `--force-build` | Skip all cache checks and force a fresh build |
+| `--available-tags` | Show available tags from the repository |
+| `-h, --help` | Show help message |
+
+### Cache Control
+- **Default behavior**: Checks local cache → remote cache → fresh build
+- **With `--force-build`**: Skips all caches and builds fresh from source
+- **Cache validation**: Uses MD5 hashes to verify package integrity
 
 ## 📦 Using the Generated Package
 
