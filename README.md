@@ -16,39 +16,24 @@ This automation tool successfully creates complete SPM packages from any tag of 
 ```
 
 
-## ⚡ Prebuild Cache System
-
-This tool includes an intelligent caching system that dramatically speeds up repeated builds:
-
-### Cache Hierarchy
-1. **Local Cache** - Instant access to previously built packages
-2. **Remote Cache** - Downloads from [GitHub repository](https://github.com/billp/communication-ui-library-ios-spm-exported/tree/main/prebuild) 
-3. **Fresh Build** - Full build from source (only when no cache available)
-
-### Cache Features
-- ✅ **MD5 Hash Validation** - Ensures integrity of cached packages
-- ✅ **Automatic Cache Creation** - Saves successful builds for future use
-- ✅ **Remote Distribution** - Share prebuilt packages via GitHub LFS
-- ✅ **Smart Fallbacks** - Graceful handling when validation fails
-- ✅ **Force Build Option** - Skip all caches when needed
-
-### Cache Locations
-- **Local**: `./prebuild/{tag}.zip` - Your local cache files
-- **Hashes**: `./prebuild/hashes.md5` - Hash validation file
-- **Remote**: `https://github.com/billp/communication-ui-library-ios-spm-exported/tree/main/prebuild`
-
 ## 🛠️ What the Script Does
 
-### Phase 1: Repository Setup
+### Phase 1: Cache Check
+- ✅ Checks local prebuild cache for existing packages
+- ✅ Downloads from remote prebuild cache if available
+- ✅ Validates package integrity with MD5 hash verification
+- ✅ Skips build process if valid cache found (unless --force-build used)
+
+### Phase 2: Repository Setup (if no cache)
 - ✅ Clones the Azure Communication UI Library repository
 - ✅ Checks out the specified git tag
 - ✅ Validates repository structure
 
-### Phase 2: CocoaPods Setup  
+### Phase 3: CocoaPods Setup  
 - ✅ Runs `pod install` to resolve dependencies
 - ✅ Prepares Xcode workspace for building
 
-### Phase 3: XCFramework Generation
+### Phase 4: XCFramework Generation
 - ✅ Builds iOS device archives (arm64)
 - ✅ Builds iOS simulator archives (arm64 + x86_64) 
 - ✅ Creates universal XCFrameworks for:
@@ -60,7 +45,7 @@ This tool includes an intelligent caching system that dramatically speeds up rep
   - `AzureCommunicationCommon` (Common SDK)
   - `AzureCore` (Core SDK)
 
-### Phase 4: SPM Package Generation
+### Phase 5: SPM Package Generation
 - ✅ Creates complete SPM package structure
 - ✅ Copies all XCFrameworks with proper paths
 - ✅ Includes source code for common components
@@ -68,7 +53,9 @@ This tool includes an intelligent caching system that dramatically speeds up rep
 - ✅ Generates Package.swift from template
 - ✅ FluentUI hybrid integration: embedded in Azure frameworks + minimal module interface
 
-### Phase 5: Validation & Testing
+### Phase 6: Cache Creation & Validation
+- ✅ Creates local prebuild cache zip for future use
+- ✅ Generates MD5 hash for integrity verification
 - ✅ Tests package resolution with Swift Package Manager
 - ✅ Validates XCFramework architectures
 - ✅ Generates documentation and test files
